@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>KI-Assistent – GSM</title>
+
+  <style>
+    :root{
+      --bg:#f3f4f6; --panel:#fff; --ink:#0f172a; --muted:#6b7280;
+      --primary:#0ea5e9; --primary-600:#0284c7; --ok:#16a34a; --danger:#ef4444;
+    }
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    .wrap{max-width:1200px;margin:24px auto;padding:0 16px}
+
+    /* Bühne / Tafel */
+    .board-shell{
+      background:var(--panel);
+      border-radius:12px; box-shadow:0 8px 24px rgba(2,6,23,.06);
+      overflow:hidden; margin-bottom:16px;
+    }
+    .board-stage{
+      position:relative; width:100%; aspect-ratio:16/9; background:#111;
+      background-image:url("/static/Klassenraum.png");
+      background-size:cover; background-position:center;
+    }
+    .teacher-img{
+      position:absolute; left:44%; bottom:3%; transform:translateX(-50%);
+      height:65%; width:auto; cursor:pointer; user-select:none; pointer-events:auto;
+      transition:transform .2s ease;
+    }
+    .teacher-img:hover{transform:translateX(-50%) scale(1.03)}
+    .school-logo{
+      position:absolute; top:24%; left:26%; width:12%; opacity:.5; pointer-events:none;
+    }
+    .chalkboard{
+      position:absolute; inset:0; background-image:url("/static/tafel.png");
+      background-size:cover; background-position:center; display:none;
+      z-index: 1;
+    }
+    .board-image{
+      position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+      max-width:80%; max-height:80%; object-fit:contain; pointer-events:none;
+      z-index: 1;
+    }
+    .annot-canvas{
+      position:absolute; inset:0; width:100%; height:100%;
+      z-index: 2;
+      pointer-events:auto;
+    }
+
+    /* Tabs */
+    .nav-tabs{
+      display:flex; background:var(--panel); border-radius:12px 12px 0 0;
+      box-shadow:0 2px 8px rgba(2,6,23,.06); margin-bottom:0;
+    }
+    .nav-tab{
+      flex:1; padding:16px 20px; text-align:center; cursor:pointer; font-weight:600;
+      border-bottom:3px solid transparent; transition:all .2s ease;
+      background:transparent; border:none; font-size:14px;
+    }
+    .nav-tab:hover{ background:#f8fafc; }
+    .nav-tab.active{ color:var(--primary); border-bottom-color:var(--primary); background:#f0f9ff; }
+    .nav-tab:first-child{ border-radius:12px 0 0 0; }
+    .nav-tab:last-child{ border-radius:0 12px 0 0; }
+
+    /* Toolbar */
+    .toolbar{
+      display:flex; gap:12px; flex-wrap:wrap; align-items:center;
+      padding:12px 16px; background:var(--panel); border-radius:0 0 12px 12px;
+    }
+    .chip{
+      display:inline-flex; gap:10px; align-items:center; padding:8px 12px;
+      border-radius:999px; background:#0b1020; color:#e2e8f0; font-weight:600; box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);
+    }
+    .btn{ padding:10px 14px; border-radius:10px; border:none; cursor:pointer; font-weight:600; transition: all 0.2s ease; }
+    .btn-primary{ background:var(--primary); color:#fff }
+    .btn-primary:hover{ background:var(--primary-600) }
+    .btn-ghost{ background:#0b1020; color:#e5e7eb }
+    .btn-danger{ background:var(--danger); color:#fff }
+    .btn.active{ background:var(--ok); color:#fff; transform: scale(1.05); }
+
+    .select{ padding:8px 10px; border-radius:10px; border:1px solid #e5e7eb; background:#fff }
+
+    /* Content Areas */
+    .content-area{ display:none; }
+    .content-area.active{ display:block; }
+
+    /* Panels / Chat */
+    .panel{ background:var(--panel); border-radius:12px; box-shadow:0 8px 24px rgba(2,6,23,.06); overflow:hidden; margin-top:16px }
+    .chat-log{ max-height:340px; overflow:auto; padding:16px; display:flex; flex-direction:column; gap:10px }
+    .msg{ padding:12px 14px; border-radius:14px; max-width:80%; white-space:pre-wrap }
+    .msg--ai{ background:#eef2ff; color:#111827; align-self:flex-start }
+    .msg--me{ background:#0ea5e9; color:#fff; align-self:flex-end }
+    .chat-bar{ display:flex; gap:10px; padding:12px; border-top:1px solid #e5e7eb }
+    .chat-input{ flex:1; padding:12px 14px; border-radius:12px; border:1px solid #e5e7eb }
+    .send{ width:48px; height:44px; border-radius:12px; border:none; background:var(--ok); color:#fff; font-size:18px; cursor:pointer }
+
+    /* Generator */
+    .gen-wrap{ padding:16px }
+    .gen-row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .gen-row + .gen-row{ margin-top:12px }
+    .gen-input{ flex:1; min-width:260px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:10px }
+    .pill{ display:inline-flex; gap:6px; align-items:center; padding:8px 12px; border-radius:999px; background:#f1f5f9; }
+    .muted{ color:var(--muted) }
+
+    /* How-To Box */
+    .howto{
+      background:var(--panel); border-radius:12px; box-shadow:0 8px 24px rgba(2,6,23,.06);
+      padding:18px; line-height:1.5; margin-top:16px;
+    }
+    .howto h2{ margin:0 0 8px 0 }
+    .howto h3{ margin:16px 0 6px 0; font-size:16px }
+    .howto ul{ margin:6px 0 0 18px }
+    .howto li{ margin:4px 0 }
+    .howto .tip{ color:var(--muted); font-size:14px }
+
+    /* FABs */
+    .fab{
+      position:fixed; right:18px; bottom:18px; display:flex; flex-direction:column; gap:10px; z-index:50;
+    }
+    .fab button{
+      width:44px; height:44px; border-radius:50%; border:none; cursor:pointer; font-size:18px; color:#fff;
+      box-shadow:0 10px 24px rgba(2,6,23,.25);
+    }
+    .fab .fab-chat{ background:var(--primary); }
+    .fab .fab-full{ background:#1f2937; }
+
+    /* Debug Info */
+    .debug-info {
+      position: fixed; top: 10px; left: 10px; background: rgba(0,0,0,0.8); color: white;
+      padding: 5px 10px; border-radius: 5px; font-size: 12px; z-index: 1000;
+      display: none; transition: opacity 0.3s ease;
+    }
+
+    /* Enhancement indicator */
+    .enhancement-indicator {
+      position: absolute; top: 8px; right: 8px; background: var(--ok); color: white;
+      padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: bold;
+      opacity: 0; transition: opacity 0.3s ease;
+    }
+    .enhancement-indicator.show { opacity: 1; }
+
+    .gen-input.enhanced {
+      border-color: var(--ok); box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.1);
+    }
+  </style>
+
+  <!-- Markdown + Sanitizer + MathJax -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+  <script>
+    window.MathJax = { tex:{inlineMath:[['\\(','\\)']], displayMath:[['$$','$$']]}, svg:{fontCache:'global'} };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+
+  <!-- Zeichen- & Screenshot-Bibliotheken -->
+  <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+</head>
+<body>
+  <div class="debug-info" id="debugInfo">Tool: select</div>
+
+  <div class="wrap">
+
+    <!-- Tabs -->
+    <div class="nav-tabs">
+      <button class="nav-tab active" data-tab="presentation">ℹ️ Anleitung</button>
+      <button class="nav-tab" data-tab="chat">💬 KI-Assistent (Text)</button>
+      <button class="nav-tab" data-tab="preparation">🖼️ Bilderzeugung an der Tafel</button>
+    </div>
+
+    <!-- Bühne -->
+    <div class="board-shell">
+      <div class="board-stage" id="boardStage">
+        <img src="/static/Lehrer.png" alt="Lehrer" class="teacher-img" id="teacherToggle" />
+        <img src="/static/GSM.png" alt="Logo" class="school-logo" />
+        <div class="chalkboard" id="chalkBoard">
+          <img id="boardImage" class="board-image" alt="Tafelbild" />
+          <canvas id="annotCanvas" class="annot-canvas"></canvas>
+        </div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="toolbar" id="toolbar">
+        <span class="chip">Fach:
+          <select id="subjectSelect" class="select">
+            <option value="Chemie" selected>Chemie</option>
+            <option value="Biologie">Biologie</option>
+            <option value="Mathematik">Mathematik</option>
+            <option value="Physik">Physik</option>
+          </select>
+        </span>
+
+        <span class="chip">Klassenstufe:
+          <select id="gradeSelect" class="select">
+            <option>Klasse 5</option><option>Klasse 6</option><option>Klasse 7</option>
+            <option>Klasse 8</option><option selected>Klasse 9</option><option>Klasse 10</option>
+            <option>EF</option><option>Q1</option><option>Q2</option>
+          </select>
+        </span>
+
+        <button id="newSessionBtn" class="btn btn-primary">🆕 Neue Sitzung</button>
+      </div>
+    </div>
+
+    <!-- Anleitung (Default) -->
+    <div class="content-area active" id="presentationContent">
+      <div class="howto">
+        <h2>Willkommen! So nutzt du die KI-Assistenten</h2>
+
+        <h3>1) KI-Assistent (Text)</h3>
+        <ul>
+          <li>Klicke auf den <strong>Lehrer im Bild</strong> oder wähle den Reiter <em>„KI-Assistent (Text)"</em>.</li>
+          <li>Frage stellen (z. B. „Wie gleiche ich Reaktionsgleichungen aus?").</li>
+          <li>Die Antwort ist knapp, schülergerecht und mit einer passenden Anschlussfrage.</li>
+          <li class="tip">Tipp: Mit <code>/bild …</code> kann direkt ein Tafelbild erzeugt werden.</li>
+        </ul>
+
+        <h3>2) Bilderzeugung an der Tafel</h3>
+        <ul>
+          <li>Wechsle in den Reiter <em>„Bilderzeugung an der Tafel"</em>.</li>
+          <li>Beschreibe dein Motiv (z. B. „Becherglas", „Nahrungskette", „Ohmsches Gesetz – Skizze").</li>
+          <li>Wähle Stil (Clipart/Realistisch), Größe und optional <em>Präzisionsmodus (careful)</em>.</li>
+          <li>Mit „Hintergrund transparent" wird das Motiv frei auf die Tafel gelegt.</li>
+          <li class="tip"><strong>Neu:</strong> Optimierte Objekterkennung für Laborgeräte, biologische Strukturen und physikalische Modelle!</li>
+        </ul>
+
+        <h3>3) Schüler-Annotationen</h3>
+        <ul>
+          <li>Im Tab <em>„Bilderzeugung an der Tafel"</em> kannst du Text und Linien auf die Tafel setzen.</li>
+          <li>Wähle das <strong>Text-Tool</strong> oder <strong>Linien-Tool</strong> und klicke auf die Tafel zum Platzieren.</li>
+          <li>Mit <em>„Prüfen lassen"</em> schickt ihr das annotierte Tafelbild an den virtuellen Lehrer.</li>
+          <li>Ihr bekommt farbcodiertes Feedback: ✅ richtig, ⚠️ überprüfen.</li>
+        </ul>
+
+        <h3>4) Verbesserte Genauigkeit</h3>
+        <ul>
+          <li><strong>Bekannte Objekte</strong> werden automatisch optimiert (Becherglas, Erlenmeyerkolben, Mikroskop, etc.)</li>
+          <li><strong>Präzisionsmodus</strong> für schwierige Begriffe - mehrere Generierungsversuche mit KI-Bewertung</li>
+          <li><strong>Clipart-Stil</strong> für eindeutige, lehrbuchartige Darstellungen</li>
+        </ul>
+
+        <p class="tip">Hinweis: Die KI erkennt jetzt automatisch über 15 wissenschaftliche Objekte und erzeugt präzisere Bilder!</p>
+      </div>
+    </div>
+
+    <!-- KI-Assistent (Text) -->
+    <div class="content-area" id="chatContent">
+      <div class="panel">
+        <div class="chat-log" id="chatLog">
+          <div class="msg msg--ai">
+            **Willkommen!** Ich bin dein KI-Assistent an der GSM. Stelle mir gerne deine Fragen!
+          </div>
+        </div>
+        <div class="chat-bar">
+          <input id="chatInput" class="chat-input" placeholder="Stelle eine Frage… (oder /bild …)" />
+          <button id="sendBtn" class="send">➤</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bilderzeugung an der Tafel -->
+    <div class="content-area" id="preparationContent">
+      <div class="panel">
+        <div class="gen-wrap">
+          <div class="gen-row">
+            <div style="position: relative; flex: 1;">
+              <input id="imgPrompt" class="gen-input" placeholder="z. B. Becherglas, Mikroskop, Zelle..." list="promptHistoryList"/>
+              <div class="enhancement-indicator" id="enhancementIndicator">🎯 Optimiert</div>
+              <datalist id="promptHistoryList"></datalist>
+            </div>
+            <select id="imgSize" class="select">
+              <option>1024x1024 (quadratisch)</option>
+              <option>1024x576 (16:9)</option>
+              <option>768x1024 (hoch)</option>
+            </select>
+            <button id="genBtn" class="btn btn-primary">Bild erzeugen</button>
+            <button id="toggleBoardBtn" class="btn">Tafel ein/aus</button>
+            <button id="clearBoardBtn" class="btn btn-danger">Bild löschen</button>
+          </div>
+          <div class="gen-row">
+            <label class="pill">
+              <input type="radio" name="style" value="clipart" checked /> Clipart/Illustration
+            </label>
+            <label class="pill">
+              <input type="radio" name="style" value="realistic" /> Realistisch
+            </label>
+            <label class="pill">
+              <input type="checkbox" id="transparentChk" checked />
+              Hintergrund transparent (Beta)
+            </label>
+            <label class="pill">
+              <input type="checkbox" id="carefulMode" />
+              Präzisionsmodus (careful)
+            </label>
+            <span class="muted">Tipp: Präzisionsmodus für schwierige Objekte aktivieren - verwendet mehrere KI-Versuche.</span>
+          </div>
+
+          <!-- Toolbar für Annotationen -->
+          <div class="gen-row" id="annotToolbar">
+            <button id="toolSelect"  class="btn active">✋ Auswahl</button>
+            <button id="toolText"    class="btn">📝 Text</button>
+            <button id="toolLine"    class="btn">📏 Linie</button>
+            <button id="toolDelete"  class="btn btn-ghost">🗑️ Löschen</button>
+            <button id="btnReview"   class="btn btn-primary">🔍 Prüfen lassen</button>
+            <span class="muted">Wähle ein Tool, klicke auf die Tafel zum Platzieren und lass deine Beschriftungen prüfen.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FABs -->
+    <div class="fab">
+      <button class="fab-chat"  id="fabChat"  title="Zum Chat">💬</button>
+      <button class="fab-full"  id="fabFull"  title="Vollbild an/aus">⛶</button>
+    </div>
+
+  </div>
+
+  <script>
+    // ------- Helpers -------
+    const $  = sel => document.querySelector(sel);
+    const $$ = sel => Array.from(document.querySelectorAll(sel));
+    const byDataTab = name => $(`.nav-tab[data-tab="${name}"]`);
+    const uuid = () => 'm_' + Math.random().toString(16).slice(2) + Date.now().toString(16);
+    function makeSessionId(){ return 's_' + Math.random().toString(16).slice(2) + Date.now().toString(16); }
+
+    // Debug helper
+    function debugLog(message) {
+      console.log('DEBUG:', message);
+      const debugEl = $('#debugInfo');
+      if (debugEl) {
+        debugEl.style.display = 'block';
+        debugEl.textContent = message;
+        setTimeout(() => {
+          if (debugEl.style.display === 'block') {
+            debugEl.style.display = 'none';
+          }
+        }, 3000);
+      }
+    }
+
+    // Debounce helper
+    function debounce(func, wait) {
+      let timeout;
+      return function executedFunction(...args) {
+        const later = () => {
+          clearTimeout(timeout);
+          func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
+    }
+
+    // ------- Elements -------
+    const tabs = {
+      presentation: byDataTab('presentation'),
+      chat:         byDataTab('chat'),
+      preparation:  byDataTab('preparation')
+    };
+    const areas = {
+      presentation: $('#presentationContent'),
+      chat:         $('#chatContent'),
+      preparation:  $('#preparationContent')
+    };
+    const toolbar       = $('#toolbar');
+    const teacher       = $('#teacherToggle');
+    const chalkBoard    = $('#chalkBoard');
+    const boardImage    = $('#boardImage');
+    const annotCanvasEl = $('#annotCanvas');
+
+    const subjectSel    = $('#subjectSelect');
+    const gradeSel      = $('#gradeSelect');
+    const newSessionBtn = $('#newSessionBtn');
+
+    const chatLog       = $('#chatLog');
+    const chatInput     = $('#chatInput');
+    const sendBtn       = $('#sendBtn');
+
+    const imgPrompt     = $('#imgPrompt');
+    const histList      = $('#promptHistoryList');
+    const imgSize       = $('#imgSize');
+    const genBtn        = $('#genBtn');
+    const toggleBoardBtn= $('#toggleBoardBtn');
+    const clearBoardBtn = $('#clearBoardBtn');
+    const transparentChk= $('#transparentChk');
+    const carefulChk    = $('#carefulMode');
+    const enhancementIndicator = $('#enhancementIndicator');
+
+    const fabChat       = $('#fabChat');
+    const fabFull       = $('#fabFull');
+
+    // Annotation-Toolbar
+    const toolSelect = $('#toolSelect');
+    const toolText   = $('#toolText');
+    const toolLine   = $('#toolLine');
+    const toolDelete = $('#toolDelete');
+    const btnReview  = $('#btnReview');
+
+    // ------- Session / Prefs -------
+    let sessionId = makeSessionId();
+    (function initPrefs(){
+      const s = localStorage.getItem('tutor_subject');
+      const g = localStorage.getItem('tutor_grade');
+      if (s) subjectSel.value = s;
+      if (g) gradeSel.value   = g;
+      subjectSel.addEventListener('change', e => localStorage.setItem('tutor_subject', e.target.value));
+      gradeSel  .addEventListener('change', e => localStorage.setItem('tutor_grade',   e.target.value));
+    })();
+
+    // ========= Board/Canvas Initialisierung =========
+    let _fab = null;
+    let _tool = 'select';
+
+    function ensureBoardVisible(){
+      if (chalkBoard.style.display !== 'block') {
+        chalkBoard.style.display = 'block';
+      }
+    }
+
+    function ensureFabricReady(){
+      if (!_fab) {
+        ensureBoardVisible();
+
+        setTimeout(() => {
+          const rect = chalkBoard.getBoundingClientRect();
+          annotCanvasEl.width  = rect.width;
+          annotCanvasEl.height = rect.height;
+
+          _fab = new fabric.Canvas('annotCanvas', {
+            selection: true,
+            backgroundColor: null
+          });
+
+          fabric.Object.prototype.transparentCorners = false;
+          fabric.Object.prototype.cornerStyle = 'circle';
+
+          // WICHTIG: Event-Handler nach Canvas-Erstellung hinzufügen
+          _fab.on('mouse:down', function(options) {
+            if (_tool === 'select') return;
+
+            if (!options.target) {  // Nur wenn nicht auf ein Objekt geklickt wurde
+              const pointer = _fab.getPointer(options.e);
+              debugLog(`Canvas-Klick: Tool=${_tool}, Position=(${pointer.x.toFixed(1)}, ${pointer.y.toFixed(1)})`);
+
+              switch(_tool) {
+                case 'text':
+                  addTextAt(pointer);
+                  setTool('select');  // Nach Hinzufügen zum Auswahlmodus wechseln
+                  break;
+                case 'line':
+                  addLineAt(pointer);
+                  setTool('select');  // Nach Hinzufügen zum Auswahlmodus wechseln
+                  break;
+              }
+            }
+          });
+
+          debugLog(`Fabric Canvas initialisiert: ${rect.width}x${rect.height}`);
+
+          new ResizeObserver(() => {
+            if (!_fab) return;
+            const newRect = chalkBoard.getBoundingClientRect();
+            _fab.setDimensions({ width: newRect.width, height: newRect.height });
+            _fab.requestRenderAll();
+          }).observe(chalkBoard);
+        }, 100);
+      } else {
+        const rect = chalkBoard.getBoundingClientRect();
+        _fab.setDimensions({ width: rect.width, height: rect.height });
+        _fab.requestRenderAll();
+      }
+      return _fab;
+    }
+
+    function initAnnotLayer(){
+      ensureBoardVisible();
+      ensureFabricReady();
+    }
+
+    function setTool(newTool) {
+      _tool = newTool;
+      debugLog(`Tool gewechselt zu: ${_tool}`);
+
+      [toolSelect, toolText, toolLine].forEach(btn => {
+        if (btn) btn.classList.remove('active');
+      });
+
+      if (newTool === 'select' && toolSelect) toolSelect.classList.add('active');
+      else if (newTool === 'text' && toolText) toolText.classList.add('active');
+      else if (newTool === 'line' && toolLine) toolLine.classList.add('active');
+
+      if (_fab) {
+        if (newTool === 'select') {
+          _fab.selection = true;
+          _fab.defaultCursor = 'default';
+        } else {
+          _fab.selection = false;
+          _fab.defaultCursor = 'crosshair';
+          _fab.discardActiveObject();  // Deselektiere alle Objekte
+          _fab.requestRenderAll();
+        }
+      }
+    }
+
+    // ------- Tabs -------
+    function setActiveTab(name){
+      Object.entries(tabs).forEach(([key, btn])=>{
+        if (!btn) return;
+        btn.classList.toggle('active', key===name);
+      });
+      Object.entries(areas).forEach(([key, area])=>{
+        if (!area) return;
+        area.classList.toggle('active', key===name);
+      });
+
+      toolbar.style.display = (name === 'presentation') ? 'none' : 'flex';
+
+      if (name === 'preparation') {
+        debugLog('Wechsel zu Preparation Tab');
+        setTimeout(() => {
+          initAnnotLayer();
+        }, 50);
+      }
+    }
+
+    // Default
+    setActiveTab('presentation');
+
+    // Tab Clicks
+    Object.entries(tabs).forEach(([name, btn])=> {
+      if (btn) {
+        btn.addEventListener('click', ()=> setActiveTab(name));
+      }
+    });
+
+    // Lehrer / FAB-Chat => Chat-Tab
+    teacher.addEventListener('click', ()=> setActiveTab('chat'));
+    fabChat.addEventListener('click', ()=> setActiveTab('chat'));
+
+    // FAB Fullscreen
+    fabFull.addEventListener('click', ()=>{
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
+      else document.exitFullscreen().catch(()=>{});
+    });
+
+    // ------- Chat -------
+    function addMsg(text, role='ai', id=null){
+      const el = document.createElement('div');
+      el.className = `msg ${role==='ai'?'msg--ai':'msg--me'}`;
+      if (id) el.dataset.msgId = id;
+      const md = marked.parse(text ?? "");
+      el.innerHTML = DOMPurify.sanitize(md);
+      chatLog.appendChild(el);
+      chatLog.scrollTop = chatLog.scrollHeight;
+      if (window.MathJax?.typesetPromise) MathJax.typesetPromise([el]);
+      return el;
+    }
+
+    function updateMsgById(id, newMarkdown){
+      const el = chatLog.querySelector(`[data-msg-id="${id}"]`);
+      if (!el) return;
+      el.innerHTML = DOMPurify.sanitize(marked.parse(newMarkdown));
+      if (window.MathJax?.typesetPromise) MathJax.typesetPromise([el]);
+    }
+
+    async function sendChat(){
+      const txt = (chatInput.value || '').trim();
+      if (!txt) return;
+      addMsg(txt, 'me');
+      chatInput.value = '';
+
+      if (txt.startsWith('/bild')){
+        const prompt = txt.replace(/^\/bild\s*/,'').trim() || 'Becherglas';
+        const mid = uuid();
+        addMsg('🖼️ *Bild wird erzeugt…*', 'ai', mid);
+
+        try{
+          await generateImage(prompt);
+          updateMsgById(mid, `✅ **Bild erzeugt.** [Zur Bilderzeugung wechseln](#goto-prep)`);
+          const link = chatLog.querySelector(`[data-msg-id="${mid}"] a[href="#goto-prep"]`);
+          link?.addEventListener('click', (e)=>{ e.preventDefault(); setActiveTab('preparation'); });
+        }catch(err){
+          updateMsgById(mid, `❌ **Bildfehler:** ${String(err.message||err)}`);
+        }
+        return;
+      }
+
+      try{
+        const r = await fetch('/ask', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            question: txt,
+            subject: subjectSel.value,
+            grade: gradeSel.value,
+            session_id: sessionId,
+            request_visual: true  // Neue Option: Visuelle Hilfen anfordern
+          })
+        });
+        const j = await r.json();
+
+        // Zeige die Antwort
+        addMsg(j.answer ?? '—', 'ai');
+
+        // Wenn ein Bild empfohlen wurde, zeige es automatisch
+        if (j.visual_aid && (j.visual_aid.prompt || j.visual_aid.image_url)) {
+          // Kurze Verzögerung für bessere UX
+          setTimeout(async () => {
+            const visualMsg = `📊 *Ich zeige dir dazu eine passende Abbildung auf der Tafel...*`;
+            addMsg(visualMsg, 'ai');
+
+            try {
+              // Prüfe ob externes Bild oder KI-Generierung
+              if (j.visual_aid.use_external && j.visual_aid.image_url) {
+                // Verwende externes Bild direkt
+                boardImage.src = j.visual_aid.image_url;
+                chalkBoard.style.display = 'block';
+                setTimeout(() => ensureFabricReady(), 100);
+
+                // Zeige Quellenangabe
+                if (j.visual_aid.attribution) {
+                  addMsg(`📚 *Bildquelle: ${j.visual_aid.attribution}*`, 'ai');
+                }
+
+                // Log Qualität
+                console.log(`Externe Bildquelle verwendet: ${j.visual_aid.quality} Qualität`);
+
+              } else if (j.visual_aid.prompt) {
+                // KI-Generierung nur für einfache Fälle
+                imgPrompt.value = j.visual_aid.prompt;
+
+                await generateImage(j.visual_aid.prompt, {
+                  style: 'clipart',
+                  transparent: false,
+                  accuracy: 'careful',
+                  size: '1024x576',
+                  silent: true
+                });
+              }
+
+              // Optional: Wechsle zur Tafel-Ansicht
+              if (j.visual_aid.auto_show) {
+                setTimeout(() => {
+                  setActiveTab('preparation');
+
+                  // Zeige Übungshinweis wenn Labels vorhanden sind
+                  if (j.visual_aid.labels && j.visual_aid.labels.length > 0) {
+                    const quality_hint = j.visual_aid.quality === 'high'
+                      ? '✨ Dies ist eine hochwertige Lehrbuch-Abbildung.'
+                      : '';
+
+                    addMsg(`✅ Die Abbildung ist jetzt auf der Tafel. ${quality_hint}
+
+**📝 Übung:** Beschrifte die Teile der ${j.visual_aid.topic}!
+
+Verwende diese Begriffe:
+${j.visual_aid.labels.map(l => `• ${l}`).join('\n')}
+
+Du kannst die Werkzeuge verwenden um Text auf die Tafel zu schreiben und dann auf "Prüfen lassen" klicken.`, 'ai');
+                  } else {
+                    addMsg('✅ Die Abbildung ist jetzt auf der Tafel.', 'ai');
+                  }
+                }, 500);
+              } else {
+                addMsg('✅ Die Abbildung ist bereit. [Zur Tafel wechseln](#goto-prep)', 'ai');
+                const links = chatLog.querySelectorAll('a[href="#goto-prep"]');
+                links.forEach(link => {
+                  link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    setActiveTab('preparation');
+                  });
+                });
+              }
+
+            } catch (err) {
+              addMsg(`⚠️ Die Abbildung konnte nicht erzeugt werden: ${err.message}`, 'ai');
+            }
+          }, 1000);
+        }
+
+        // Wenn interaktive Elemente vorgeschlagen wurden
+        if (j.interactive_elements) {
+          for (const element of j.interactive_elements) {
+            if (element.type === 'labeling_exercise') {
+              // Erstelle automatisch eine Beschriftungsübung
+              const exerciseMsg = `\n\n**📝 Übung:** ${element.instruction}\n\nBeschrifte die Abbildung auf der Tafel mit folgenden Begriffen:\n${element.terms.map(t => `• ${t}`).join('\n')}`;
+              addMsg(exerciseMsg, 'ai');
+            }
+          }
+        }
+
+      }catch(err){
+        console.error(err);
+        addMsg('Entschuldigung, es gab einen Verbindungsfehler.', 'ai');
+      }
+    }
+
+    sendBtn.addEventListener('click', sendChat);
+    chatInput.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); sendChat(); } });
+
+    // Neue Sitzung
+    newSessionBtn.addEventListener('click', ()=>{
+      sessionId = makeSessionId();
+      chatLog.innerHTML = `<div class="msg msg--ai">🆕 Neue Sitzung gestartet. Womit machen wir weiter?</div>`;
+    });
+
+    // ------- Prompt-History -------
+    const HIST_KEY = 'img_prompt_history_v1';
+    function loadHistory(){
+      try{ return JSON.parse(localStorage.getItem(HIST_KEY) || '[]'); }catch{ return []; }
+    }
+    function saveHistory(arr){
+      try{ localStorage.setItem(HIST_KEY, JSON.stringify(arr)); }catch{}
+    }
+    function addToHistory(prompt){
+      let hist = loadHistory().filter(x => typeof x === 'string' && x.trim() !== '');
+      hist = hist.filter(x => x.toLowerCase() !== prompt.toLowerCase());
+      hist.unshift(prompt);
+      hist = hist.slice(0, 12);
+      saveHistory(hist);
+      renderHistory();
+    }
+    function renderHistory(){
+      const hist = loadHistory();
+      histList.innerHTML = hist.map(p => `<option value="${p}"></option>`).join('');
+    }
+    renderHistory();
+
+    // ------- Bildfunktionen -------
+    chalkBoard.style.display = 'none';
+    boardImage.src = '';
+
+    toggleBoardBtn.addEventListener('click', ()=>{
+      const show = (chalkBoard.style.display !== 'block');
+      chalkBoard.style.display = show ? 'block' : 'none';
+      if (show) {
+        setTimeout(() => ensureFabricReady(), 50);
+      }
+    });
+
+    clearBoardBtn.addEventListener('click', ()=>{
+      boardImage.src = '';
+      chalkBoard.style.display = 'none';
+      if (_fab) {
+        _fab.clear();
+        debugLog('Canvas geleert');
+      }
+    });
+
+    // ===== Verbesserte Bildgenerierung =====
+    async function generateImage(optionalPrompt, forceSettings = {}) {
+      const prompt = (optionalPrompt ?? imgPrompt.value).trim();
+      if (!prompt){
+        addMsg('Bitte gib erst eine Bildbeschreibung ein.', 'ai');
+        throw new Error('Kein Prompt');
+      }
+
+      const styleRadio = document.querySelector('input[name="style"]:checked');
+      const style = forceSettings.style || (styleRadio ? styleRadio.value : 'clipart');
+      const size  = forceSettings.size || imgSize.value.split(' ')[0];
+
+      // WICHTIG: Bei automatischen Lernhilfen Transparenz ausschalten
+      const transparent = forceSettings.hasOwnProperty('transparent')
+        ? forceSettings.transparent
+        : !!transparentChk.checked;
+
+      const accuracy = forceSettings.accuracy || (carefulChk.checked ? 'careful' : 'fast');
+
+      addToHistory(prompt);
+
+      // Zeige erweiterte Info bei careful mode
+      if (accuracy === 'careful' && !forceSettings.silent) {
+        addMsg('🎯 *Präzisionsmodus aktiviert - verwende erweiterte Prompt-Optimierung...*', 'ai');
+      }
+
+      const r = await fetch('/draw', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ prompt, size, style, transparent, accuracy })
+      });
+
+      const j = await r.json();
+      if(!r.ok) throw new Error(j.error || 'Unbekannter Fehler');
+
+      if (j.image_url){
+        boardImage.src = j.image_url;
+        chalkBoard.style.display = 'block';
+
+        // Zeige Debug-Info wenn verfügbar
+        if (j.debug && accuracy === 'careful' && !forceSettings.silent) {
+          addMsg(`✅ **Bild erzeugt** (${j.debug.attempts_made} Versuche, Methode: ${j.debug.selected_method})`, 'ai');
+        }
+
+        setTimeout(() => ensureFabricReady(), 100);
+      }
+
+      return j;  // Rückgabe für weitere Verarbeitung
+    }
+
+    genBtn.addEventListener('click', async () => {
+      try {
+        await generateImage();
+      } catch (err) {
+        addMsg('**Bildfehler:** ' + err.message, 'ai');
+      }
+    });
+
+    // ===== Prompt-Verbesserung Vorschau =====
+    async function previewPromptEnhancement() {
+      const prompt = imgPrompt.value.trim();
+      if (!prompt) {
+        enhancementIndicator.classList.remove('show');
+        imgPrompt.classList.remove('enhanced');
+        return;
+      }
+
+      const styleRadio = document.querySelector('input[name="style"]:checked');
+      const style = styleRadio ? styleRadio.value : 'clipart';
+
+      try {
+        const r = await fetch('/improve_prompt', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ input: prompt, style: style })
+        });
+
+        const j = await r.json();
+
+        if (j.has_enhancement) {
+          enhancementIndicator.classList.add('show');
+          imgPrompt.classList.add('enhanced');
+          console.log('🎯 Erkanntes Objekt mit spezieller Optimierung:', prompt);
+          console.log('🔍 Verbesserter Prompt:', j.enhanced_prompts.primary.substring(0, 100) + '...');
+        } else {
+          enhancementIndicator.classList.remove('show');
+          imgPrompt.classList.remove('enhanced');
+          console.log('🔍 Allgemeine Prompt-Verbesserung für:', prompt);
+        }
+
+      } catch (err) {
+        console.log('Prompt-Vorschau nicht verfügbar:', err.message);
+        enhancementIndicator.classList.remove('show');
+        imgPrompt.classList.remove('enhanced');
+      }
+    }
+
+    // Event-Listener für automatische Prompt-Vorschau
+    if (imgPrompt) {
+      imgPrompt.addEventListener('input', debounce(previewPromptEnhancement, 500));
+    }
+
+    // ===================== Annotationen (Fabric.js) =====================
+
+    function addLineAt(pointer){
+      if (!_fab) {
+        debugLog('Fabric Canvas nicht bereit für Linie');
+        return;
+      }
+      const line = new fabric.Line([pointer.x, pointer.y, pointer.x+80, pointer.y], {
+        stroke: '#ffffff',
+        strokeWidth: 3,
+        selectable: true,
+        id: 'ln_' + uuid(),
+        shadow: 'rgba(0,0,0,0.5) 2px 2px 3px'
+      });
+      _fab.add(line).setActiveObject(line);
+      _fab.requestRenderAll();
+      debugLog(`Linie hinzugefügt bei (${pointer.x}, ${pointer.y})`);
+    }
+
+    function addTextAt(pointer){
+      if (!_fab) {
+        debugLog('Fabric Canvas nicht bereit für Text');
+        return;
+      }
+      const text = new fabric.IText('Beschriftung', {
+        left: pointer.x,
+        top: pointer.y,
+        fill: '#ffffff',
+        fontSize: 20,
+        fontWeight: 'bold',
+        id: 'lbl_' + uuid(),
+        shadow: 'rgba(0,0,0,0.5) 1px 1px 2px'
+      });
+      _fab.add(text).setActiveObject(text);
+      _fab.requestRenderAll();
+      debugLog(`Text hinzugefügt bei (${pointer.x}, ${pointer.y})`);
+    }
+
+    // Tool-Button-Handler
+    function setupToolHandlers() {
+      if (toolSelect) {
+        toolSelect.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          initAnnotLayer();
+          setTool('select');
+        });
+      }
+
+      if (toolText) {
+        toolText.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          initAnnotLayer();
+          setTool('text');
+        });
+      }
+
+      if (toolLine) {
+        toolLine.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          initAnnotLayer();
+          setTool('line');
+        });
+      }
+
+      if (toolDelete) {
+        toolDelete.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          initAnnotLayer();
+          if (_fab) {
+            const sel = _fab.getActiveObjects();
+            sel.forEach(o => _fab.remove(o));
+            _fab.discardActiveObject().requestRenderAll();
+            debugLog(`${sel.length} Objekte gelöscht`);
+          }
+        });
+      }
+    }
+
+    // ======= Prüfen lassen (Screenshot + /review_annotations) =======
+    async function reviewAnnotations(){
+      if (!_fab) {
+        addMsg('❌ **Fehler:** Canvas nicht initialisiert', 'ai');
+        return;
+      }
+
+      // Stelle sicher, dass die Tafel sichtbar ist
+      if (chalkBoard.style.display !== 'block') {
+        addMsg('❌ **Fehler:** Keine Tafel mit Bild vorhanden', 'ai');
+        return;
+      }
+
+      // Prüfe ob ein Bild vorhanden ist
+      if (!boardImage.src || boardImage.src === window.location.href) {
+        addMsg('❌ **Fehler:** Kein Bild auf der Tafel vorhanden. Bitte erst ein Bild erzeugen!', 'ai');
+        return;
+      }
+
+      try {
+        // Warte kurz, damit alle Elemente korrekt gerendert sind
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Erstelle einen kombinierten Screenshot: Hintergrundbild + Canvas mit Annotationen
+        const combinedCanvas = document.createElement('canvas');
+        const ctx = combinedCanvas.getContext('2d');
+
+        // Setze Canvas-Größe
+        const rect = chalkBoard.getBoundingClientRect();
+        combinedCanvas.width = rect.width;
+        combinedCanvas.height = rect.height;
+
+        // 1. Zeichne das Tafelbild (Hintergrund)
+        const tafelImg = new Image();
+        tafelImg.src = '/static/tafel.png';
+        await new Promise((resolve) => {
+          tafelImg.onload = resolve;
+          tafelImg.onerror = () => resolve(); // Fortfahren auch ohne Tafelhintergrund
+        });
+
+        // Zeichne Tafelhintergrund (falls vorhanden)
+        if (tafelImg.complete && tafelImg.naturalWidth > 0) {
+          ctx.drawImage(tafelImg, 0, 0, combinedCanvas.width, combinedCanvas.height);
+        } else {
+          // Fallback: Grüne Tafel
+          ctx.fillStyle = '#2d4a2b';
+          ctx.fillRect(0, 0, combinedCanvas.width, combinedCanvas.height);
+        }
+
+        // 2. Zeichne das generierte Bild (boardImage)
+        if (boardImage.src && boardImage.complete) {
+          const img = new Image();
+          img.src = boardImage.src;
+          await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+          });
+
+          // Berechne Position und Größe (zentriert, max 80% der Tafel)
+          const maxWidth = combinedCanvas.width * 0.8;
+          const maxHeight = combinedCanvas.height * 0.8;
+
+          let drawWidth = img.width;
+          let drawHeight = img.height;
+
+          // Skaliere wenn nötig
+          const scale = Math.min(maxWidth / img.width, maxHeight / img.height, 1);
+          drawWidth *= scale;
+          drawHeight *= scale;
+
+          const x = (combinedCanvas.width - drawWidth) / 2;
+          const y = (combinedCanvas.height - drawHeight) / 2;
+
+          ctx.drawImage(img, x, y, drawWidth, drawHeight);
+        }
+
+        // 3. Zeichne die Fabric.js Annotationen darüber
+        const fabricDataUrl = _fab.toDataURL({
+          format: 'png',
+          multiplier: 1,
+          backgroundColor: null
+        });
+
+        const annotImg = new Image();
+        annotImg.src = fabricDataUrl;
+        await new Promise((resolve) => {
+          annotImg.onload = resolve;
+        });
+
+        ctx.drawImage(annotImg, 0, 0);
+
+        // Konvertiere zu Base64
+        const dataURL = combinedCanvas.toDataURL('image/png');
+
+        // Sammle Text-Annotationen
+        const texts = _fab.getObjects()
+          .filter(o => o.type === 'i-text')
+          .map(o => ({
+            id: o.id || ('lbl_' + uuid()),
+            text: (o.text || '').trim()
+          }))
+          .filter(x => x.text.length > 0);
+
+        debugLog(`Review: ${texts.length} Textlabels gefunden`);
+
+        // Erstelle eine Beschreibung basierend auf dem aktuellen Bild-Prompt
+        const currentPrompt = imgPrompt.value || 'das Objekt';
+        const subj = (subjectSel?.value || 'Biologie');
+
+        // Dynamische Aufgabenstellung basierend auf dem Bild
+        let task = `Beschrifte die Abbildung`;
+        if (currentPrompt.toLowerCase().includes('blatt')) {
+          task = 'Beschrifte den Blattquerschnitt';
+        } else if (currentPrompt.toLowerCase().includes('zelle')) {
+          task = 'Beschrifte die Zellstrukturen';
+        } else if (currentPrompt.toLowerCase().includes('herz')) {
+          task = 'Beschrifte das Herz';
+        } else if (currentPrompt.toLowerCase().includes('mikroskop')) {
+          task = 'Beschrifte das Mikroskop';
+        } else if (currentPrompt.toLowerCase().includes('tier') || currentPrompt.toLowerCase().includes('hund')) {
+          task = 'Beschrifte die Körperteile des Tieres';
+        }
+
+        // Sende zur Überprüfung
+        const resp = await fetch('/review_annotations', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            image_b64: dataURL,
+            annotations: texts,
+            task: task,
+            expected_terms: [],
+            subject: subj,
+            grade: (gradeSel?.value || 'Klasse 9'),
+            context: `Das Bild zeigt: ${currentPrompt}` // Zusätzlicher Kontext
+          })
+        });
+
+        const j = await resp.json();
+
+        if (!resp.ok){
+          addMsg("❌ **Prüfung fehlgeschlagen:** " + (j.error || 'Unbekannter Fehler'), 'ai');
+          return;
+        }
+
+        // Formatiere die Antwort
+        const lines = [];
+        lines.push(`**Feedback zum Bild "${currentPrompt}" (Score: ${j.score ?? '—'}/100):**`);
+        lines.push(j.overall || '—');
+
+        if (Array.isArray(j.per_label)){
+          lines.push('');
+          lines.push('**Deine Beschriftungen:**');
+          for (const item of j.per_label){
+            const mark = item.correct === true ? '✅' : (item.correct === false ? '⚠️' : '•');
+            lines.push(`- ${mark} **${item.text}** — ${item.feedback || ''}`);
+
+            // Färbe die Annotationen entsprechend dem Feedback
+            const obj = _fab.getObjects().find(o => o.id === item.id);
+            if (obj){
+              if (item.correct === true){
+                if (obj.type === 'i-text') obj.set({ fill:'#22c55e' });
+                else obj.set({ stroke:'#22c55e' });
+              } else if (item.correct === false){
+                if (obj.type === 'i-text') obj.set({ fill:'#ef4444' });
+                else obj.set({ stroke:'#ef4444' });
+              }
+            }
+          }
+          _fab.requestRenderAll();
+        }
+
+        if (Array.isArray(j.missing) && j.missing.length){
+          lines.push('');
+          lines.push('**Fehlende Beschriftungen:** ' + j.missing.join(', '));
+        }
+        if (Array.isArray(j.wrong) && j.wrong.length){
+          lines.push('**Falsch platziert oder unpassend:** ' + j.wrong.join(', '));
+        }
+
+        addMsg(lines.join('\n'), 'ai');
+
+      } catch (err) {
+        console.error('Review error:', err);
+        addMsg('❌ **Fehler beim Review:** ' + err.message, 'ai');
+      }
+    }
+
+    if (btnReview) {
+      btnReview.addEventListener('click', () => {
+        addMsg('🔎 *Sende dein Tafelbild zur Korrektur…*', 'ai');
+        reviewAnnotations();
+      });
+    }
+
+    // Initialisiere Tool-Handler
+    setupToolHandlers();
+
+    // Initial setup
+    setTool('select');
+    debugLog('Annotation-System initialisiert');
+
+    console.log('KI-Lehrer System vollständig geladen');
+  </script>
+</body>
+</html>

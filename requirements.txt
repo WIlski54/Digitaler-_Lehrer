@@ -1,0 +1,9 @@
+# requirements.txt
+flask
+flask_cors
+google-generativeai
+google-auth
+google-oauth2
+Pillow
+python-dotenv
+gunicorn

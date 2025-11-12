@@ -1,0 +1,16 @@
+# .gitignore
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Umgebungsvariablen
+.env
+*.env
+
+# Google Cloud Service Account Schlüssel
+# Lade NIEMALS deinen privaten Schlüssel hoch!
+service_account_key.json
+*.json
