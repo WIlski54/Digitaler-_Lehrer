@@ -106,15 +106,38 @@ GENERATION_CONFIG = {
     "temperature": 0.6,
 }
 
+# --- VERBESSERTE SAFETY SETTINGS ---
+SAFETY_SETTINGS = [
+    {
+        "category": HarmCategory.HARM_CATEGORY_HARASSMENT,
+        "threshold": HarmBlockThreshold.BLOCK_NONE,
+    },
+    {
+        "category": HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+        "threshold": HarmBlockThreshold.BLOCK_NONE,
+    },
+    {
+        "category": HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+        "threshold": HarmBlockThreshold.BLOCK_NONE,
+    },
+    {
+        "category": HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+        "threshold": HarmBlockThreshold.BLOCK_NONE,
+    },
+]
+
 def init_gemini(prefer: str = "fast") -> None:
     global GEMINI_MODEL, GEMINI_MODEL_NAME
     try:
         api_key = _get_api_key()
         genai.configure(api_key=api_key)
         name = pick_gemini_model(prefer=prefer)
-        GEMINI_MODEL = genai.GenerativeModel(name)
+        GEMINI_MODEL = genai.GenerativeModel(
+            name,
+            safety_settings=SAFETY_SETTINGS  # Direkt beim Model setzen
+        )
         GEMINI_MODEL_NAME = name
-        logger.info("Gemini initialisiert: %s", name)
+        logger.info("Gemini initialisiert: %s (mit Safety Settings)", name)
     except Exception as e:
         logger.exception("Gemini Init-Fehler: %s", e)
         GEMINI_MODEL = None
@@ -200,16 +223,45 @@ except Exception as e:
 
 # ======================================================================
 # Visuelle Hilfen - Konfiguration
-# (unverändert)
 # ======================================================================
 VISUAL_TRIGGERS = {
     'Biologie': {
-        'aufbau': { 'pflanzenzelle': { 'prompt': 'plant cell cross section labeled educational diagram style', 'labels': ['Zellwand', 'Zellmembran', 'Zellkern', 'Chloroplast', 'Vakuole', 'Mitochondrium', 'Endoplasmatisches Retikulum'], 'auto_show': True }, 'tierzelle': { 'prompt': 'animal cell cross section labeled educational diagram', 'labels': ['Zellmembran', 'Zellkern', 'Mitochondrium', 'Golgi-Apparat', 'Endoplasmatisches Retikulum', 'Lysosom'], 'auto_show': True }, 'blatt': { 'prompt': 'leaf cross section microscopic view labeled diagram', 'labels': ['Kutikula', 'Epidermis', 'Palisadengewebe', 'Schwammgewebe', 'Leitbündel', 'Spaltöffnung'], 'auto_show': True }, 'herz': { 'prompt': 'human heart anatomy cross section educational diagram', 'labels': ['Rechter Vorhof', 'Linker Vorhof', 'Rechte Kammer', 'Linke Kammer', 'Aorta', 'Lungenvene'], 'auto_show': True } },
-        'prozess': { 'photosynthese': { 'prompt': 'photosynthesis process diagram chloroplast light reactions', 'auto_show': True }, 'zellteilung': { 'prompt': 'cell division mitosis stages diagram educational', 'auto_show': True }, 'verdauung': { 'prompt': 'human digestive system diagram labeled educational', 'labels': ['Mund', 'Speiseröhre', 'Magen', 'Dünndarm', 'Dickdarm', 'Leber', 'Bauchspeicheldrüse'], 'auto_show': True } }
+        'aufbau': { 
+            'pflanzenzelle': { 'prompt': 'plant cell cross section labeled educational diagram style', 'labels': ['Zellwand', 'Zellmembran', 'Zellkern', 'Chloroplast', 'Vakuole', 'Mitochondrium', 'Endoplasmatisches Retikulum'], 'auto_show': True }, 
+            'tierzelle': { 'prompt': 'animal cell cross section labeled educational diagram', 'labels': ['Zellmembran', 'Zellkern', 'Mitochondrium', 'Golgi-Apparat', 'Endoplasmatisches Retikulum', 'Lysosom'], 'auto_show': True }, 
+            'blatt': { 'prompt': 'leaf cross section microscopic view labeled diagram', 'labels': ['Kutikula', 'Epidermis', 'Palisadengewebe', 'Schwammgewebe', 'Leitbündel', 'Spaltöffnung'], 'auto_show': True }, 
+            'herz': { 'prompt': 'human heart anatomy cross section educational diagram', 'labels': ['Rechter Vorhof', 'Linker Vorhof', 'Rechte Kammer', 'Linke Kammer', 'Aorta', 'Lungenvene'], 'auto_show': True } 
+        },
+        'prozess': { 
+            'photosynthese': { 'prompt': 'photosynthesis process diagram chloroplast light reactions', 'auto_show': True }, 
+            'zellteilung': { 'prompt': 'cell division mitosis stages diagram educational', 'auto_show': True }, 
+            'verdauung': { 'prompt': 'human digestive system diagram labeled educational', 'labels': ['Mund', 'Speiseröhre', 'Magen', 'Dünndarm', 'Dickdarm', 'Leber', 'Bauchspeicheldrüse'], 'auto_show': True } 
+        }
     },
-    'Chemie': { 'aufbau': { 'atom': { 'prompt': 'atom structure diagram protons neutrons electrons orbital model', 'labels': ['Atomkern', 'Proton', 'Neutron', 'Elektron', 'Elektronenschale'], 'auto_show': True }, 'periodensystem': { 'prompt': 'periodic table of elements educational poster style', 'auto_show': False }, 'molekül': { 'prompt': 'water molecule H2O 3D structure diagram', 'auto_show': True } }, 'reaktion': { 'säure-base': { 'prompt': 'acid base reaction diagram pH scale educational', 'auto_show': True }, 'redox': { 'prompt': 'redox reaction electron transfer diagram', 'auto_show': True } } },
-    'Physik': { 'schema': { 'stromkreis': { 'prompt': 'simple electric circuit diagram battery bulb switch labeled', 'labels': ['Batterie', 'Schalter', 'Glühbirne', 'Leitung', 'Widerstand'], 'auto_show': True }, 'hebel': { 'prompt': 'lever physics diagram fulcrum force educational', 'labels': ['Drehpunkt', 'Kraftarm', 'Lastarm', 'Kraft', 'Last'], 'auto_show': True }, 'optik': { 'prompt': 'light refraction lens diagram ray tracing educational', 'labels': ['Linse', 'Brennpunkt', 'Hauptachse', 'Gegenstand', 'Bild'], 'auto_show': True } } },
-    'Mathematik': { 'geometrie': { 'dreieck': { 'prompt': 'triangle geometry diagram angles sides labeled mathematical', 'labels': ['Seite a', 'Seite b', 'Seite c', 'Winkel α', 'Winkel β', 'Winkel γ'], 'auto_show': True }, 'kreis': { 'prompt': 'circle geometry diagram radius diameter circumference', 'labels': ['Mittelpunkt', 'Radius', 'Durchmesser', 'Umfang', 'Sehne'], 'auto_show': True } } }
+    'Chemie': { 
+        'aufbau': { 
+            'atom': { 'prompt': 'atom structure diagram protons neutrons electrons orbital model', 'labels': ['Atomkern', 'Proton', 'Neutron', 'Elektron', 'Elektronenschale'], 'auto_show': True }, 
+            'periodensystem': { 'prompt': 'periodic table of elements educational poster style', 'auto_show': False }, 
+            'molekül': { 'prompt': 'water molecule H2O 3D structure diagram', 'auto_show': True } 
+        }, 
+        'reaktion': { 
+            'säure-base': { 'prompt': 'acid base reaction diagram pH scale educational', 'auto_show': True }, 
+            'redox': { 'prompt': 'redox reaction electron transfer diagram', 'auto_show': True } 
+        } 
+    },
+    'Physik': { 
+        'schema': { 
+            'stromkreis': { 'prompt': 'simple electric circuit diagram battery bulb switch labeled', 'labels': ['Batterie', 'Schalter', 'Glühbirne', 'Leitung', 'Widerstand'], 'auto_show': True }, 
+            'hebel': { 'prompt': 'lever physics diagram fulcrum force educational', 'labels': ['Drehpunkt', 'Kraftarm', 'Lastarm', 'Kraft', 'Last'], 'auto_show': True }, 
+            'optik': { 'prompt': 'light refraction lens diagram ray tracing educational', 'labels': ['Linse', 'Brennpunkt', 'Hauptachse', 'Gegenstand', 'Bild'], 'auto_show': True } 
+        } 
+    },
+    'Mathematik': { 
+        'geometrie': { 
+            'dreieck': { 'prompt': 'triangle geometry diagram angles sides labeled mathematical', 'labels': ['Seite a', 'Seite b', 'Seite c', 'Winkel α', 'Winkel β', 'Winkel γ'], 'auto_show': True }, 
+            'kreis': { 'prompt': 'circle geometry diagram radius diameter circumference', 'labels': ['Mittelpunkt', 'Radius', 'Durchmesser', 'Umfang', 'Sehne'], 'auto_show': True } 
+        } 
+    }
 }
 
 # (Spezialfälle aus check_for_visual_aid, damit /improve_prompt sie finden kann)
@@ -219,12 +271,18 @@ SPECIAL_CASES = {
     'auge': { 'prompt': 'human eye anatomy cross section educational diagram', 'topic': 'Auge', 'auto_show': True, 'supports_labeling': True, 'labels': ['Hornhaut', 'Iris', 'Pupille', 'Linse', 'Netzhaut', 'Sehnerv'] }
 }
 # Synonyme aus build_image_prompt
-SYNONYMS = { "becherglas": "laboratory beaker", "messzylinder": "graduated cylinder", "erlenmeyerkolben": "erlenmeyer flask", "pipette": "pipette", "chloroplast": "chloroplast", "blattquerschnitt": "cross section of a leaf", }
+SYNONYMS = { 
+    "becherglas": "laboratory beaker", 
+    "messzylinder": "graduated cylinder", 
+    "erlenmeyerkolben": "erlenmeyer flask", 
+    "pipette": "pipette", 
+    "chloroplast": "chloroplast", 
+    "blattquerschnitt": "cross section of a leaf", 
+}
 
 
 # ======================================================================
 # Hilfsfunktionen – Größen, Speichern, Prompt-Aufbereitung
-# (unverändert)
 # ======================================================================
 def _safe_size(size_str: str) -> Tuple[int, int]:
     s = (size_str or "1024x1024").strip().split()[0]
@@ -334,18 +392,11 @@ def check_for_visual_aid(question: str, answer: str, subject: str) -> Optional[D
 # Text-KI Helper – sicher generieren mit Auto-Re-Select
 # ======================================================================
 
-# --- PATCH 4: Safety Settings definieren ---
-SAFETY_SETTINGS = {
-    HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-    HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-}
-
-# --- PATCH 4: Komplette Funktion ersetzen ---
+# --- VERBESSERTE gemini_generate Funktion ---
 def gemini_generate(prompt: str, retries: int = 2) -> str:
     global GEMINI_MODEL
     last_err = None
+    
     for attempt in range(retries + 1):
         try:
             if not GEMINI_MODEL:
@@ -353,36 +404,66 @@ def gemini_generate(prompt: str, retries: int = 2) -> str:
                 if not GEMINI_MODEL:
                     raise RuntimeError("Text-KI nicht initialisiert.")
             
-            # --- PATCH START ---
+            logger.info(f"Gemini Request (Versuch {attempt + 1}): Prompt-Länge={len(prompt)}")
+            
+            # Generierung mit Safety Settings
             resp = GEMINI_MODEL.generate_content(
                 prompt, 
                 generation_config=GENERATION_CONFIG,
-                safety_settings=SAFETY_SETTINGS  # <-- HIER IST DIE ÄNDERUNG
+                safety_settings=SAFETY_SETTINGS
             )
             
-            # Robusterer Text-Zugriff, um den Fehler von eben zu verhindern
-            if resp.parts:
-                return resp.text
-            else:
-                # Loggen, warum es leer war
-                finish_reason = resp.candidates[0].finish_reason if resp.candidates else "UNKNOWN"
-                logger.warning("Gemini-Antwort hatte keine 'parts', finish_reason: %s", finish_reason)
-                # Den Fehler, den du gesehen hast, manuell auslösen, damit der Retry-Loop ihn fängt
-                raise ValueError(f"Leere Antwort von KI, Grund: {finish_reason}")
-            # --- PATCH ENDE ---
+            # BESSERE Fehlerbehandlung für blockierte Inhalte
+            if not resp.parts:
+                # Prüfe den finish_reason
+                finish_reason = None
+                blocked = False
+                
+                if resp.candidates:
+                    candidate = resp.candidates[0]
+                    finish_reason = candidate.finish_reason
+                    
+                    # Prüfe Safety Ratings
+                    if hasattr(candidate, 'safety_ratings'):
+                        logger.warning(f"Safety Ratings: {candidate.safety_ratings}")
+                    
+                    # finish_reason: 1=STOP (normal), 2=MAX_TOKENS, 3=SAFETY, 4=RECITATION, 5=OTHER
+                    if finish_reason in [3, 4]:  # SAFETY oder RECITATION
+                        blocked = True
+                        logger.error(f"⚠️ Gemini blockierte die Antwort! Grund: {finish_reason}")
+                
+                if blocked:
+                    # Bei Safety-Block: Gib eine freundliche Standardantwort zurück
+                    return "Entschuldigung, ich kann diese Anfrage gerade nicht beantworten. Bitte formuliere deine Frage anders oder versuche es mit einem anderen Thema."
+                else:
+                    # Bei anderen leeren Antworten
+                    logger.warning(f"Gemini-Antwort hatte keine 'parts', finish_reason: {finish_reason}")
+                    raise ValueError(f"Leere Antwort von KI, Grund: {finish_reason}")
+            
+            # Erfolgreiche Antwort
+            text = resp.text
+            logger.info(f"✓ Gemini Antwort erhalten: {len(text)} Zeichen")
+            return text
 
         except Exception as e:
             msg = str(e)
             last_err = e
+            
             # Bei Model-404/400 sofort neu wählen
             if "not found" in msg or "is not supported" in msg or "404" in msg or "400" in msg:
-                logger.warning("Gemini Modellfehler (%s) – Re-Select & Retry (%d/%d)", msg, attempt+1, retries)
+                logger.warning(f"Gemini Modellfehler ({msg}) – Re-Select & Retry ({attempt+1}/{retries})")
                 reselect_gemini(prefer="fast")
                 continue
-            # Rate Limit: kurzer Backoff wäre denkbar (hier weggelassen)
-            logger.exception("Gemini generate_content Fehler: %s", e)
+            
+            # Bei anderen Fehlern loggen und abbrechen
+            logger.exception(f"Gemini generate_content Fehler: {e}")
             break
-    raise last_err if last_err else RuntimeError("Unbekannter Fehler bei Gemini.")
+    
+    # Falls alle Versuche fehlschlagen
+    if last_err:
+        raise last_err
+    else:
+        raise RuntimeError("Unbekannter Fehler bei Gemini.")
 
 
 # ======================================================================
@@ -406,7 +487,6 @@ def ping():
 def ask():
     """
     Erweiterte /ask Route mit automatischer Visual Aid Erkennung
-    (unverändert)
     """
     data = request.get_json(silent=True) or {}
     user_question = (data.get("question") or "").strip()
@@ -425,6 +505,8 @@ Tutor:
 """
 
     try:
+        logger.info(f"📝 Frage erhalten: '{user_question[:100]}...' (Fach: {subject}, Stufe: {grade})")
+        
         answer_text = gemini_generate(final_prompt)
         response = {"answer": answer_text}
 
@@ -439,16 +521,16 @@ Tutor:
                         'terms': visual_aid['labels']
                     }]
 
+        logger.info(f"✅ Antwort gesendet: {len(answer_text)} Zeichen")
         return jsonify(response)
 
     except Exception as e:
-        logger.exception("Fehler /ask: %s", e)
-        return jsonify({"answer": "Entschuldigung, es gab ein Problem mit der KI-Verbindung."}), 500
+        logger.exception(f"❌ Fehler /ask: {e}")
+        return jsonify({"answer": "Entschuldigung, es gab ein Problem mit der KI-Verbindung. Bitte versuche es erneut."}), 500
 
 
 # ---------------------------------------
 # /draw  (robuste Version mit Logging)
-# (unverändert)
 # ---------------------------------------
 @app.route("/draw", methods=["POST"])
 def draw():
@@ -552,7 +634,6 @@ def improve_prompt():
 
 # ---------------------------------------
 # /review_annotations  (mit Kontext-Awareness)
-# (unverändert)
 # ---------------------------------------
 @app.route("/review_annotations", methods=["POST"])
 def review_annotations():
@@ -630,7 +711,6 @@ Bitte **nur** das JSON ausgeben. Beziehe dich auf das AKTUELLE Bild!
 
 # ---------------------------------------
 # /check_visual_aid - Endpoint für Visual Aid Prüfung
-# (unverändert)
 # ---------------------------------------
 @app.route("/check_visual_aid", methods=["POST"])
 def check_visual_aid_endpoint():
