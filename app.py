@@ -102,7 +102,7 @@ GEMINI_MODEL = None
 GEMINI_MODEL_NAME = None
 
 GENERATION_CONFIG = {
-    "max_output_tokens": 512,
+    "max_output_tokens": 2048,  # Erhöht von 512 auf 2048
     "temperature": 0.6,
 }
 
@@ -151,24 +151,15 @@ def reselect_gemini(prefer: str = "fast") -> None:
 init_gemini(prefer="fast")
 
 TUTOR_PROMPT = """
-[Rolle]
-Du bist ein geduldiger, fachlich korrekter Tutor für Sekundarstufe I/II in NRW.
-Du erklärst klar und knapp – mit korrekten Fachbegriffen – und arbeitest sehr schülerorientiert.
+Du bist ein geduldiger Tutor für Schüler (Sek I/II, NRW).
 
-[Dialog-Regeln]
-- Antworte natürlich, knüpfe an die letzte Schüleräußerung an.
-- Stelle höchstens **eine** gezielte Rückfrage pro Antwort.
-- Max. **8 Sätze** oder nummerierte, kurze Schritte.
-- Gib am Ende (wenn passend) **eine** Mini-Übungsfrage oder handlungsorientierten nächsten Schritt.
+Regeln:
+- Antworte knapp und verständlich (max. 6 Sätze)
+- Nutze korrekte Fachbegriffe, aber erkläre sie kurz
+- Stelle maximal 1 Rückfrage
+- Gib am Ende einen Mini-Übungstipp
 
-[Didaktik]
-- Fachbegriffe korrekt, kurz erläutert.
-- Denk-/Rechenschritte knapp nachvollziehbar.
-- Altersangemessene, motivierende Sprache.
-
-[Format]
-- Nutze bei Bedarf Markdown (fett, Listen, Formeln).
-- Rechen-/Begriffsarbeit strukturiert.
+Format: Nutze Markdown (fett, Listen, Formeln) wo sinnvoll.
 """
 
 # ======================================================================
@@ -428,7 +419,17 @@ def gemini_generate(prompt: str, retries: int = 2) -> str:
                         logger.warning(f"Safety Ratings: {candidate.safety_ratings}")
                     
                     # finish_reason: 1=STOP (normal), 2=MAX_TOKENS, 3=SAFETY, 4=RECITATION, 5=OTHER
-                    if finish_reason in [3, 4]:  # SAFETY oder RECITATION
+                    if finish_reason == 2:  # MAX_TOKENS
+                        logger.warning("⚠️ MAX_TOKENS erreicht - Antwort wurde abgeschnitten")
+                        # Versuche trotzdem Text zu extrahieren
+                        if candidate.content and candidate.content.parts:
+                            text = "".join(part.text for part in candidate.content.parts if hasattr(part, 'text'))
+                            if text:
+                                logger.info(f"✓ Teilantwort extrahiert: {len(text)} Zeichen")
+                                return text
+                        # Wenn wirklich nichts da ist, gib eine kurze Antwort
+                        return "Die Antwort war zu lang. Bitte stelle eine spezifischere Frage."
+                    elif finish_reason in [3, 4]:  # SAFETY oder RECITATION
                         blocked = True
                         logger.error(f"⚠️ Gemini blockierte die Antwort! Grund: {finish_reason}")
                 
