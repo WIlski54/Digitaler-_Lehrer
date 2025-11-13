@@ -10,13 +10,15 @@ from io import BytesIO
 from pathlib import Path
 from typing import Tuple, List, Dict, Any, Optional
 
-# NEU: 'render_template' hinzugefügt
+# PATCH 1: 'render_template' hinzugefügt
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from dotenv import load_dotenv
 
 # ---------- KI: Text (Gemini) ----------
 import google.generativeai as genai
+# PATCH 4: Import für Safety Settings
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
 
 # ---------- KI: Vertex Imagen (HTTP über google-auth) ----------
 from google.oauth2 import service_account
@@ -77,7 +79,6 @@ def pick_gemini_model(prefer: str = "fast") -> str:
     prefer: "fast" (flash bevorzugen) oder "quality" (pro bevorzugen).
     Nimmt sonst das beste verfügbare Textmodell.
     """
-    # Optional: fixes Modell via ENV erzwingen
     forced = (os.getenv("GEMINI_MODEL") or "").strip()
     if forced:
         return forced
@@ -97,8 +98,8 @@ def pick_gemini_model(prefer: str = "fast") -> str:
     cand.sort(key=_version_tuple, reverse=True)
     return cand[0]
 
-GEMINI_MODEL = None  # wird Instanz (GenerativeModel)
-GEMINI_MODEL_NAME = None  # gemerkter Name (str)
+GEMINI_MODEL = None
+GEMINI_MODEL_NAME = None
 
 GENERATION_CONFIG = {
     "max_output_tokens": 512,
@@ -120,7 +121,6 @@ def init_gemini(prefer: str = "fast") -> None:
         GEMINI_MODEL_NAME = None
 
 def reselect_gemini(prefer: str = "fast") -> None:
-    """Bei 400/404 dynamisch neu wählen."""
     logger.info("Gemini Re-Select angestoßen …")
     init_gemini(prefer=prefer)
 
@@ -130,7 +130,22 @@ init_gemini(prefer="fast")
 TUTOR_PROMPT = """
 [Rolle]
 Du bist ein geduldiger, fachlich korrekter Tutor für Sekundarstufe I/II in NRW.
-... (dein restlicher Prompt) ...
+Du erklärst klar und knapp – mit korrekten Fachbegriffen – und arbeitest streng schülerorientiert.
+
+[Dialog-Regeln]
+- Antworte natürlich, knüpfe an die letzte Schüleräußerung an.
+- Stelle höchstens **eine** gezielte Rückfrage pro Antwort.
+- Max. **8 Sätze** oder nummerierte, kurze Schritte.
+- Gib am Ende (wenn passend) **eine** Mini-Übungsfrage oder handlungsorientierten nächsten Schritt.
+
+[Didaktik]
+- Fachbegriffe korrekt, kurz erläutert.
+- Denk-/Rechenschritte knapp nachvollziehbar.
+- Altersangemessene, motivierende Sprache.
+
+[Format]
+- Nutze bei Bedarf Markdown (fett, Listen, Formeln).
+- Rechen-/Begriffsarbeit strukturiert.
 """
 
 # ======================================================================
@@ -140,10 +155,9 @@ Du bist ein geduldiger, fachlich korrekter Tutor für Sekundarstufe I/II in NRW.
 GCP_PROJECT_ID       = os.getenv("GCP_PROJECT_ID", "ki-lehrer-468715")
 GCP_LOCATION         = os.getenv("GCP_LOCATION", "us-central1")
 IMAGEN_MODEL         = os.getenv("IMAGEN_MODEL", "imagen-3.0-generate-002")
-# Fallback für lokales Testen
-SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_FILE", "/home/DrWK2/service_account_key.json")
+SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_FILE", "/home/DrWK2/service_account_key.json") # Fallback für lokales Testen
 
-# NEUE UMGEBUNGSVARIABLE FÜR RENDER
+# PATCH 2: NEUE UMGEBUNGSVARIABLE FÜR RENDER
 GCP_SERVICE_ACCOUNT_JSON = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
 
 IMAGEN_ENDPOINT = (
@@ -154,7 +168,7 @@ IMAGEN_ENDPOINT = (
 VERTEX_CREDENTIALS = None
 VERTEX_SESSION = None
 
-# --- PATCH: ANGEPASSTE CREDENTIAL-LOGIK FÜR RENDER ---
+# --- PATCH 2: ANGEPASSTE CREDENTIAL-LOGIK FÜR RENDER ---
 try:
     scopes = ["https://www.googleapis.com/auth/cloud-platform"]
     if GCP_SERVICE_ACCOUNT_JSON:
@@ -318,8 +332,17 @@ def check_for_visual_aid(question: str, answer: str, subject: str) -> Optional[D
 
 # ======================================================================
 # Text-KI Helper – sicher generieren mit Auto-Re-Select
-# (unverändert)
 # ======================================================================
+
+# --- PATCH 4: Safety Settings definieren ---
+SAFETY_SETTINGS = {
+    HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+    HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+}
+
+# --- PATCH 4: Komplette Funktion ersetzen ---
 def gemini_generate(prompt: str, retries: int = 2) -> str:
     global GEMINI_MODEL
     last_err = None
@@ -329,8 +352,25 @@ def gemini_generate(prompt: str, retries: int = 2) -> str:
                 init_gemini(prefer="fast")
                 if not GEMINI_MODEL:
                     raise RuntimeError("Text-KI nicht initialisiert.")
-            resp = GEMINI_MODEL.generate_content(prompt, generation_config=GENERATION_CONFIG)
-            return resp.text if hasattr(resp, "text") else str(resp)
+            
+            # --- PATCH START ---
+            resp = GEMINI_MODEL.generate_content(
+                prompt, 
+                generation_config=GENERATION_CONFIG,
+                safety_settings=SAFETY_SETTINGS  # <-- HIER IST DIE ÄNDERUNG
+            )
+            
+            # Robusterer Text-Zugriff, um den Fehler von eben zu verhindern
+            if resp.parts:
+                return resp.text
+            else:
+                # Loggen, warum es leer war
+                finish_reason = resp.candidates[0].finish_reason if resp.candidates else "UNKNOWN"
+                logger.warning("Gemini-Antwort hatte keine 'parts', finish_reason: %s", finish_reason)
+                # Den Fehler, den du gesehen hast, manuell auslösen, damit der Retry-Loop ihn fängt
+                raise ValueError(f"Leere Antwort von KI, Grund: {finish_reason}")
+            # --- PATCH ENDE ---
+
         except Exception as e:
             msg = str(e)
             last_err = e
@@ -349,7 +389,7 @@ def gemini_generate(prompt: str, retries: int = 2) -> str:
 # Routen
 # ======================================================================
 
-# --- NEU: Route zum Ausliefern der HTML-Seite ---
+# --- PATCH 1: Route zum Ausliefern der HTML-Seite ---
 @app.route("/")
 def index():
     """Liefert die Haupt-HTML-Datei aus."""
@@ -466,7 +506,7 @@ def draw():
         return jsonify({"error": f"Serverfehler: {e.__class__.__name__}: {e}"}), 500
 
 
-# --- NEU: Fehlende Route /improve_prompt ---
+# --- PATCH 3: Fehlende Route /improve_prompt ---
 @app.route("/improve_prompt", methods=["POST"])
 def improve_prompt():
     """
@@ -532,7 +572,21 @@ def review_annotations():
 
     sys_prompt = f"""
 Du bist ein strenger, aber faire*r Fachlehrer*in ({subject}, {grade}). 
-... (dein restlicher Prompt) ...
+Du bekommst eine Liste von Etiketten (Beschriftungen), die auf einem Bild platziert wurden.
+{f"Kontext zum Bild: {context}" if context else ""}
+Aufgabe: Prüfe die fachliche Korrektheit und gib präzises, kurzes Feedback.
+WICHTIG: Beziehe dich NUR auf das aktuelle Bild und dessen Kontext!
+
+Gib **ausschließlich** gültiges JSON zurück im Format:
+{{
+  "overall": "Kurzes Gesamtfeedback in 1-2 Sätzen.",
+  "score": 0-100,
+  "per_label": [
+     {{ "id": "<id>", "text": "<label>", "correct": true/false, "feedback": "ein Satz" }}
+  ],
+  "missing": ["Begriff1", "Begriff2"],
+  "wrong": ["falscherBegriff1"]
+}}
 """
 
     labels_text = "\n".join([f"- ({it.get('id','?')}): {it.get('text','').strip()}" for it in annotations])
@@ -548,7 +602,6 @@ Bitte **nur** das JSON ausgeben. Beziehe dich auf das AKTUELLE Bild!
 """
 
     try:
-        # (Logik zur JSON-Extraktion vereinfacht)
         text = gemini_generate(sys_prompt + "\n\n" + user_prompt)
         
         j = {}
